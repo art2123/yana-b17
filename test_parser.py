@@ -1,7 +1,6 @@
 """Tests for B17 forum topic parser."""
 
-from main import format_telegram_message, parse_topics
-from main import Topic
+from main import Topic, format_telegram_message, parse_topics
 
 SAMPLE_HTML = """
 <table>
@@ -20,22 +19,27 @@ SAMPLE_HTML = """
 <tr class="list " id="topic_635999">
 <td class="i"><span class="ico_svg ico_svg_18 ico_svg_f2"><span></span></span></td>
 <td class="t"><a href="/forum/topic.php?id=635999">Новая тема</a>
-<div class="fio">Автор: Тест (Консультирует: Иван Иванов)</div></td>
+<div class="fio">Автор: Тест</div></td>
 <td class="n"><span title="Просмотров: 12">0</span></td>
+</tr>
+<tr class="list " id="topic_636000">
+<td class="i"><span class="ico_svg ico_svg_18 ico_svg_f2"><span></span></span></td>
+<td class="t"><a href="/forum/topic.php?id=636000">Уже с консультантом</a>
+<div class="fio">Автор: Кто-то (Консультирует: Иван Иванов)</div></td>
+<td class="n"><span title="Просмотров: 5">0</span></td>
 </tr>
 </table>
 """
 
 
-def test_parse_topics_f2_with_zero_replies_only():
+def test_parse_topics_f2_without_consultant_and_zero_replies():
     topics = parse_topics(SAMPLE_HTML)
     assert len(topics) == 1
     topic = topics[0]
     assert topic.topic_id == "635999"
     assert topic.title == "Новая тема"
     assert topic.url == "https://www.b17.ru/forum/topic.php?id=635999"
-    assert "Тест" in topic.author_line
-    assert topic.consultant == "Иван Иванов"
+    assert topic.author_line == "Автор: Тест"
 
 
 def test_ignores_f2_with_replies():
@@ -48,14 +52,19 @@ def test_ignores_f1_with_zero_replies():
     assert all(topic.topic_id != "635567" for topic in topics)
 
 
+def test_ignores_f2_with_consultant_assigned():
+    topics = parse_topics(SAMPLE_HTML)
+    assert all(topic.topic_id != "636000" for topic in topics)
+
+
 def test_telegram_message_contains_clickable_link():
     topic = Topic(
         topic_id="635999",
         title="Новая тема",
         url="https://www.b17.ru/forum/topic.php?id=635999",
         author_line="Автор: Тест",
-        consultant="Иван Иванов",
     )
     message = format_telegram_message(topic)
     assert '<a href="https://www.b17.ru/forum/topic.php?id=635999">' in message
     assert "Открыть тему на B17.ru</a>" in message
+    assert "Консультирует" not in message

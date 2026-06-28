@@ -21,7 +21,7 @@ USER_AGENT = (
     "Chrome/120.0.0.0 Safari/537.36"
 )
 SEEN_RETENTION_DAYS = 7
-CONSULTANT_RE = re.compile(r"\(Консультирует:\s*(.+?)\)")
+CONSULTANT_MARKER_RE = re.compile(r"\(Консультирует:\s*.+?\)")
 FORUM_HEADERS = {
     "User-Agent": USER_AGENT,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -40,7 +40,6 @@ class Topic:
     title: str
     url: str
     author_line: str
-    consultant: str | None
 
 
 def fetch_forum_page(url: str) -> str:
@@ -120,12 +119,11 @@ def parse_topics(page_html: str) -> list[Topic]:
         title = title_link.get_text(strip=True) if title_link else "Без названия"
 
         fio_el = row.select_one("td.t .fio")
-        author_line = fio_el.get_text(" ", strip=True) if fio_el else ""
-        consultant = None
-        if fio_el:
-            match = CONSULTANT_RE.search(fio_el.get_text(" ", strip=True))
-            if match:
-                consultant = match.group(1).strip()
+        fio_text = fio_el.get_text(" ", strip=True) if fio_el else ""
+        if CONSULTANT_MARKER_RE.search(fio_text):
+            continue
+
+        author_line = fio_text
 
         topics.append(
             Topic(
@@ -133,7 +131,6 @@ def parse_topics(page_html: str) -> list[Topic]:
                 title=title,
                 url=f"https://www.b17.ru/forum/topic.php?id={topic_id}",
                 author_line=author_line,
-                consultant=consultant,
             )
         )
 
@@ -187,14 +184,12 @@ def format_telegram_message(topic: Topic) -> str:
     safe_url = html.escape(topic.url, quote=True)
     safe_title = html.escape(topic.title)
     lines = [
-        "Новая демо-консультация без ответов",
+        "Демо-консультация без консультанта",
         "",
         f'<a href="{safe_url}"><b>{safe_title}</b></a>',
     ]
     if topic.author_line:
         lines.append(html.escape(topic.author_line))
-    if topic.consultant and topic.consultant not in topic.author_line:
-        lines.append(f"Консультирует: {html.escape(topic.consultant)}")
     lines.append(f'\n<a href="{safe_url}">Открыть тему на B17.ru</a>')
     return "\n".join(lines)
 
