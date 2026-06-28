@@ -47,7 +47,8 @@ pytest test_parser.py -v
 
 1. Залейте репозиторий на GitHub.
 2. В [Railway](https://railway.com): **New Project** → **Deploy from GitHub repo**.
-3. Cron-расписание подтянется из [`railway.toml`](railway.toml): `*/10 * * * *` (UTC, каждые 10 минут).
+3. В **Settings** → **Cron Schedule** задайте вручную: `*/10 * * * *` (UTC, каждые 10 минут).  
+   Важно: cron лучше задавать в веб-интерфейсе Railway, а не только в `railway.toml`.
 4. Добавьте **Volume**, смонтируйте в `/data`.
 5. В **Variables** сервиса задайте:
 
@@ -57,7 +58,26 @@ pytest test_parser.py -v
    | `TELEGRAM_CHAT_ID` | числовой chat_id |
    | `DATA_DIR` | `/data` |
 
-6. Сделайте **Redeploy** и проверьте логи первого запуска.
+6. Дождитесь cron-запуска или нажмите **Run now** во вкладке **Executions** (см. ниже).
+
+## Где смотреть логи на Railway
+
+**Redeploy не запускает cron-скрипт сразу** — он только обновляет образ. Логи появляются при срабатывании расписания.
+
+1. Откройте сервис **yana-b17**
+2. Вкладка **Executions** (или **Cron Runs**) — список запусков по расписанию
+3. Нажмите **Run now**, чтобы запустить вручную без ожидания 10 минут
+4. Кликните на конкретный запуск → **Deploy Logs**
+
+Ожидаемые строки:
+
+```
+=== B17 monitor started at ...
+No new matching topics.
+=== B17 monitor finished with exit code 0 at ...
+```
+
+Если в **Deployments** статус **Active** завис надолго — предыдущий запуск не завершился, новые cron-запуски пропускаются. Перезапустите сервис или дождитесь завершения.
 
 ## Переменные окружения
 

@@ -5,10 +5,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py .
-
-RUN mkdir -p /data
+COPY main.py entrypoint.sh ./
+RUN chmod +x entrypoint.sh && mkdir -p /data
 
 ENV DATA_DIR=/data
+ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "main.py"]
+CMD ["bash", "entrypoint.sh"]
