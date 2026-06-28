@@ -184,16 +184,18 @@ def save_seen(data_dir: Path, seen: dict[str, str]) -> None:
 
 
 def format_telegram_message(topic: Topic) -> str:
+    safe_url = html.escape(topic.url, quote=True)
+    safe_title = html.escape(topic.title)
     lines = [
         "Новая демо-консультация без ответов",
         "",
-        f"<b>{html.escape(topic.title)}</b>",
+        f'<a href="{safe_url}"><b>{safe_title}</b></a>',
     ]
     if topic.author_line:
         lines.append(html.escape(topic.author_line))
     if topic.consultant and topic.consultant not in topic.author_line:
         lines.append(f"Консультирует: {html.escape(topic.consultant)}")
-    lines.extend(["", topic.url])
+    lines.append(f'\n<a href="{safe_url}">Открыть тему на B17.ru</a>')
     return "\n".join(lines)
 
 

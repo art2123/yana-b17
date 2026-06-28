@@ -1,6 +1,7 @@
 """Tests for B17 forum topic parser."""
 
-from main import parse_topics
+from main import format_telegram_message, parse_topics
+from main import Topic
 
 SAMPLE_HTML = """
 <table>
@@ -45,3 +46,16 @@ def test_ignores_f2_with_replies():
 def test_ignores_f1_with_zero_replies():
     topics = parse_topics(SAMPLE_HTML)
     assert all(topic.topic_id != "635567" for topic in topics)
+
+
+def test_telegram_message_contains_clickable_link():
+    topic = Topic(
+        topic_id="635999",
+        title="Новая тема",
+        url="https://www.b17.ru/forum/topic.php?id=635999",
+        author_line="Автор: Тест",
+        consultant="Иван Иванов",
+    )
+    message = format_telegram_message(topic)
+    assert '<a href="https://www.b17.ru/forum/topic.php?id=635999">' in message
+    assert "Открыть тему на B17.ru</a>" in message
