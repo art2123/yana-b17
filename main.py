@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -21,6 +22,16 @@ USER_AGENT = (
 )
 SEEN_RETENTION_DAYS = 7
 CONSULTANT_RE = re.compile(r"\(Консультирует:\s*(.+?)\)")
+FORUM_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Referer": "https://www.b17.ru/",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
+FETCH_RETRIES = 4
+FETCH_RETRY_DELAYS = (5, 15, 30, 60)
 
 
 @dataclass(frozen=True)
@@ -33,14 +44,59 @@ class Topic:
 
 
 def fetch_forum_page(url: str) -> str:
-    response = requests.get(
-        url,
-        headers={"User-Agent": USER_AGENT},
-        timeout=30,
-    )
-    response.raise_for_status()
-    response.encoding = response.apparent_encoding or "utf-8"
-    return response.text
+    session = requests.Session()
+    session.headers.update(FORUM_HEADERS)
+
+    try:
+        session.get("https://www.b17.ru/", timeout=30)
+        time.sleep(1)
+    except requests.RequestException as exc:
+        print(f"Warning: warmup request failed: {exc}", file=sys.stderr)
+
+    last_error: requests.RequestException | None = None
+
+    for attempt in range(FETCH_RETRIES):
+        try:
+            response = session.get(url, timeout=30)
+        except requests.RequestException as exc:
+            last_error = exc
+            delay = FETCH_RETRY_DELAYS[min(attempt, len(FETCH_RETRY_DELAYS) - 1)]
+            print(f"Request failed: {exc}, retry in {delay}s", file=sys.stderr)
+            time.sleep(delay)
+            continue
+
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After", "")
+            if retry_after.isdigit():
+                delay = int(retry_after)
+            else:
+                delay = FETCH_RETRY_DELAYS[min(attempt, len(FETCH_RETRY_DELAYS) - 1)]
+            print(
+                f"Rate limited (429), retry in {delay}s "
+                f"(attempt {attempt + 1}/{FETCH_RETRIES})",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+            continue
+
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            last_error = exc
+            if attempt < FETCH_RETRIES - 1:
+                delay = FETCH_RETRY_DELAYS[min(attempt, len(FETCH_RETRY_DELAYS) - 1)]
+                print(f"HTTP error: {exc}, retry in {delay}s", file=sys.stderr)
+                time.sleep(delay)
+                continue
+            raise
+
+        response.encoding = response.apparent_encoding or "utf-8"
+        return response.text
+
+    if last_error is not None:
+        raise last_error
+
+    raise RuntimeError("Failed to fetch forum page after retries")
 
 
 def parse_topics(page_html: str) -> list[Topic]:
